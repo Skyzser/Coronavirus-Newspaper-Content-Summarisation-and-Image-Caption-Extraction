@@ -3,7 +3,8 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import re
-from transformers import pipeline
+import torch
+from transformers import BartTokenizer, BartForConditionalGeneration
 
 def format_content(string):
     # Remove HTML tags
@@ -14,11 +15,18 @@ def format_content(string):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def generate_summary(soup, summariser):
+def generate_summary(soup, tokenizer, model):
     content = soup.find_all('p')
     formatted_content = format_content(str(content))
-    summary = summariser(formatted_content, min_length=150, max_length=300, do_sample=False)
-    return summary[0]['summary_text'] if summary else "No Summary"
+    # Encode the input text into PyTorch tensors
+    inputs = tokenizer.encode(formatted_content, return_tensors="pt", truncation=True, max_length=1024)
+    # Move inputs to the same device as the model
+    device = next(model.parameters()).device
+    inputs = inputs.to(device)
+    # Generate summary with set length constraints
+    summary_ids = model.generate(inputs, min_length=100, max_length=300, do_sample=False, early_stopping=True)
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    return summary
 
 def generate_caption(soup, publisher):
     content = ""
@@ -41,27 +49,30 @@ def generate_caption(soup, publisher):
     caption = content.strip()
     return caption
 
-def retrieve_content(url, summariser, publisher):
+def retrieve_content(url, tokenizer, model, publisher):
     try:
         response = requests.get(url, timeout=20, headers={
-            "User-Agent": "Mozilla/5.0"  # Mimic a browser
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1"
         })
         if response.status_code != 200:
             return None, None, None
         soup = BeautifulSoup(response.text, 'html.parser')
-        return soup.title.string if soup.title else "No Title", generate_summary(soup, summariser), generate_caption(soup, publisher)
+        title = soup.title.string if soup.title else "No Title"
+        summary = generate_summary(soup, tokenizer, model)
+        caption = generate_caption(soup, publisher)
+        return title, summary, caption
     except Exception as e:
         print(f"Failed to retrieve content for URL: {url} | Error: {e}")
         return None, None, None
 
-def create_processed_dataset(df, rows, summariser):
+def create_processed_dataset(df, rows, tokenizer, model):
     dataset = []
     
     for i in range(rows):
         publisher = df.loc[i, 'Paper']
         if publisher in {"times", "telegraph"}:
             continue
-        title, summary, caption = retrieve_content(df.loc[i, 'Link'], summariser, publisher)
+        title, summary, caption = retrieve_content(df.loc[i, 'Link'], tokenizer, model, publisher)
         if title is None or summary is None or caption is None:
             print(f"Failed to retrieve content for dataset item {i + 1}")
             continue
@@ -90,11 +101,15 @@ def main():
     df = pd.read_csv('Raw_Dataset.csv', encoding='utf-8')
     rows = df.shape[0]
     
-    # Initialise the summariser
-    summariser = pipeline("summarization", model="facebook/bart-large-cnn")
+    # Initialise the tokenizer and model using PyTorch
+    tokenizer = BartTokenizer.from_pretrained("facebook/bart-large-cnn")
+    model = BartForConditionalGeneration.from_pretrained("facebook/bart-large-cnn")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    print("Using device:", device)
+    model.to(device)
 
     # Prepare the data to fit the JSON format
-    dataset = create_processed_dataset(df, rows, summariser)
+    dataset = create_processed_dataset(df, rows, tokenizer, model)
     
     # Export the processed data to a JSON file
     export_to_json(dataset)
