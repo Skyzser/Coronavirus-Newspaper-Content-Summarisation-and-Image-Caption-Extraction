@@ -17,7 +17,6 @@ Dataset used: [Coronavirus Newspaper Classification](https://www.kaggle.com/code
 - Removes HTML tags and cleans up article text
 - Generates article summaries using the `facebook/bart-large-cnn` transformer
 - Extracts image captions based on publisher-specific HTML structure
-- Parallel processing for faster performance (via `ThreadPoolExecutor`)
 - Exports structured data to `processedData.json`
 
 ---
