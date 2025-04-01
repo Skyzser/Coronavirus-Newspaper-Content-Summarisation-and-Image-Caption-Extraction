@@ -43,6 +43,7 @@ def generate_caption(soup, publisher):
         content = content.get_text() if content else "No Caption"
     elif publisher == "sun":
         content = soup.find("figcaption").find("span", class_="article__media-span")
+        content = content.get_text() if content else "No Caption"
     else:
         content = 'unknown'
     
