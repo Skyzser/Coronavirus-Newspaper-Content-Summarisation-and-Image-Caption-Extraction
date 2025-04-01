@@ -3,7 +3,6 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import re
-from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 
 def format_content(string):
@@ -57,15 +56,15 @@ def retrieve_content(url, summariser, publisher):
 
 def create_processed_dataset(df, rows, summariser):
     dataset = []
-
-    def process_row(i):
+    
+    for i in range(rows):
         publisher = df.loc[i, 'Paper']
         if publisher in {"times", "telegraph"}:
-            return None
+            continue
         title, summary, caption = retrieve_content(df.loc[i, 'Link'], summariser, publisher)
         if title is None or summary is None or caption is None:
             print(f"Failed to retrieve content for dataset item {i + 1}")
-            return None
+            continue
         datasetItem = {
             "ID": i + 1,
             "Metadata": { 
@@ -78,12 +77,8 @@ def create_processed_dataset(df, rows, summariser):
             "NewsArticle_Image_Caption": caption
         }
         print(f"Processed dataset item {i + 1}")
-        return datasetItem
+        dataset.append(datasetItem)
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        results = list(executor.map(process_row, range(rows)))
-
-    dataset = [item for item in results if item is not None]
     return dataset
 
 def export_to_json(dataset):
