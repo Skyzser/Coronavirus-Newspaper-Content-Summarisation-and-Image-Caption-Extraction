@@ -1,4 +1,4 @@
-# Coronavirus Newspaper Content Summarisation and Image Caption Extraction
+# COVID-19 Newspaper Summarisation and Caption Extraction
 
 This project, which is done as part of my M.Sc's Text Analytics module, processes a dataset of COVID-19 related newspaper articles, retrieving each article's content, generating a summary using NLP techniques, and extracting the image caption from the article's webpage. The final structured data is exported to a JSON file.
 
